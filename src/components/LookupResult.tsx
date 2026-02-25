@@ -52,7 +52,7 @@ export function LookupResult({ result }: Props) {
                     rel="noopener noreferrer"
                     className="font-semibold text-blue-700 hover:text-blue-900 underline"
                   >
-                    Vote Cari!
+                    Cari for Council
                   </a>
                 </p>
               )}

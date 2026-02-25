@@ -40,9 +40,23 @@ export function LookupResult({ result }: Props) {
             Future district (2026)
           </h2>
           {futureDistrict ? (
-            <p className="mt-2 text-xl font-semibold text-slate-800">
-              District {futureDistrict.districtId}
-            </p>
+            <>
+              <p className="mt-2 text-xl font-semibold text-slate-800">
+                District {futureDistrict.districtId}
+              </p>
+              {String(futureDistrict.districtId) === "7" && (
+                <p className="mt-2 text-sm">
+                  <a
+                    href="https://cariforbcc.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-blue-700 hover:text-blue-900 underline"
+                  >
+                    Vote Cari!
+                  </a>
+                </p>
+              )}
+            </>
           ) : (
             <p className="mt-2 text-slate-500">Could not determine district.</p>
           )}

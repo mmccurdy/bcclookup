@@ -7,8 +7,9 @@ type Props = { result: LookupResponse | LookupError };
 export function LookupResult({ result }: Props) {
   if (!result.success) {
     return (
-      <div className="mt-8 p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
-        <p>{result.error}</p>
+      <div className="mt-8 rounded-xl border border-red-500/60 bg-red-950/70 px-4 py-3 text-sm text-red-100 shadow-md shadow-black/40">
+        <p className="font-medium">We hit a snag.</p>
+        <p className="mt-1 text-red-100/90">{result.error}</p>
       </div>
     );
   }
@@ -17,40 +18,44 @@ export function LookupResult({ result }: Props) {
 
   return (
     <div className="mt-8 space-y-6">
-      <p className="text-slate-600">
+      <p className="text-slate-200 text-sm">
         Results for <strong>{address}</strong>
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <section className="p-4 rounded-lg bg-white border border-slate-200 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
+        <section className="relative overflow-hidden rounded-xl border border-slate-700/70 bg-slate-900/80 px-4 py-4 shadow-lg shadow-black/40">
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-yellow-400 via-red-600 to-black" />
+          <h2 className="pl-3 text-xs font-semibold text-slate-300 uppercase tracking-[0.18em]">
             Current district
           </h2>
           {currentDistrict ? (
-            <p className="mt-2 text-xl font-semibold text-slate-800">
-              District {currentDistrict.districtId}
+            <p className="mt-3 pl-3 text-2xl font-semibold text-slate-50">
+              District <span className="text-yellow-300">{currentDistrict.districtId}</span>
             </p>
           ) : (
-            <p className="mt-2 text-slate-500">Could not determine district.</p>
+            <p className="mt-3 pl-3 text-sm text-slate-400">
+              Could not determine current district.
+            </p>
           )}
         </section>
 
-        <section className="p-4 rounded-lg bg-white border border-slate-200 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
+        <section className="relative overflow-hidden rounded-xl border border-slate-700/70 bg-slate-900/80 px-4 py-4 shadow-lg shadow-black/40">
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-yellow-400 via-red-600 to-black" />
+          <h2 className="pl-3 text-xs font-semibold text-slate-300 uppercase tracking-[0.18em]">
             Future district (2026)
           </h2>
           {futureDistrict ? (
             <>
-              <p className="mt-2 text-xl font-semibold text-slate-800">
-                District {futureDistrict.districtId}
+              <p className="mt-3 pl-3 text-2xl font-semibold text-slate-50">
+                District <span className="text-yellow-300">{futureDistrict.districtId}</span>
               </p>
               {String(futureDistrict.districtId) === "7" && (
-                <p className="mt-2 text-sm">
+                <p className="mt-3 pl-3 text-xs sm:text-sm text-yellow-200">
                   <a
                     href="https://cariforbcc.com"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-semibold text-blue-700 hover:text-blue-900 underline"
+                    className="font-semibold underline decoration-yellow-300 underline-offset-2 hover:text-yellow-100"
                   >
                     Cari for Council
                   </a>
@@ -58,7 +63,9 @@ export function LookupResult({ result }: Props) {
               )}
             </>
           ) : (
-            <p className="mt-2 text-slate-500">Could not determine district.</p>
+            <p className="mt-3 pl-3 text-sm text-slate-400">
+              Could not determine future district.
+            </p>
           )}
         </section>
       </div>

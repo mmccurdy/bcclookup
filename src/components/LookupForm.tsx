@@ -157,7 +157,7 @@ export function LookupForm({ onResult, onLoading, loading }: Props) {
           onChange={(e) => setAddress(e.target.value)}
           onKeyDown={handleInputKeyDown}
           placeholder="Start typing your address"
-          className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          className="w-full px-4 py-3 rounded-lg border border-slate-600 bg-slate-900/80 text-slate-50 placeholder:text-slate-500 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
           disabled={loading}
           autoComplete="off"
           aria-autocomplete="list"
@@ -212,7 +212,7 @@ export function LookupForm({ onResult, onLoading, loading }: Props) {
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-3 px-4 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+        className="w-full py-3 px-4 rounded-lg bg-yellow-400 text-slate-900 font-semibold hover:bg-yellow-300 focus:ring-2 focus:ring-yellow-300 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
       >
         {loading ? "Looking up…" : "Find my district"}
       </button>

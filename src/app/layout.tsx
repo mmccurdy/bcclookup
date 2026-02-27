@@ -14,8 +14,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased min-h-screen bg-slate-50 text-slate-900">
-        {children}
+      <body className="antialiased min-h-screen text-slate-50">
+        <div
+          className="min-h-screen bg-cover bg-center"
+          style={{ backgroundImage: "url('/maryland-flag.jpg')" }}
+        >
+          <div className="min-h-screen bg-slate-950/75 backdrop-blur-xl">
+            {children}
+          </div>
+        </div>
       </body>
     </html>
   );

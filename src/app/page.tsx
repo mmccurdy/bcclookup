@@ -33,41 +33,50 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
 
   return (
-    <main className="max-w-2xl mx-auto px-4 py-10 sm:py-16">
-      <header className="text-center mb-10">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">
-          <p>Baltimore County</p>
-          <p>Councilmanic District Lookup</p>
-        </h1>
-        <p className="mt-2 text-slate-600">
-          Enter your address to see your current and future (2026) council
-          district.
-        </p>
-      </header>
+    <main className="max-w-3xl mx-auto px-4 py-10 sm:py-16">
+      <section className="relative rounded-2xl border border-slate-700/70 bg-slate-900/70 shadow-2xl shadow-black/50 px-5 py-8 sm:px-8 sm:py-10 backdrop-blur">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r from-yellow-400 via-red-600 to-black" />
 
-      <LookupForm
-        onResult={setResult}
-        onLoading={setLoading}
-        loading={loading}
-      />
+        <header className="text-center mb-8 sm:mb-10">
 
-      {result && <LookupResult result={result} />}
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-50 leading-tight">
+            <span>Baltimore County</span>
+            <span className="block sm:inline sm:ml-2">
+              Councilmanic District Lookup
+            </span>
+          </h1>
+          <p className="mt-3 text-sm sm:text-base text-slate-300 max-w-xl mx-auto">
+            Enter your address to see your current and future (2026)<br /> Baltimore
+            County Council district.
+          </p>
+        </header>
 
-      <footer className="mt-16 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
-        <p>
-          Data from Baltimore County GIS. This tool is unofficial. Verify
-          district with{" "}
-          <a
-            href="https://www.baltimorecountymd.gov"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-slate-700"
-          >
-            Baltimore County
-          </a>
-          .
-        </p>
-      </footer>
+        <LookupForm
+          onResult={setResult}
+          onLoading={setLoading}
+          loading={loading}
+        />
+
+        {result && <LookupResult result={result} />}
+
+        <footer className="mt-10 pt-4 border-t border-slate-700 text-center text-xs sm:text-sm text-slate-400">
+          <p>
+            This is an unofficial tool based on Baltimore County GIS data.
+          </p> 
+          <p>You can verify your 2026
+            district with the{" "}
+            <a
+              href="https://voterservices.elections.maryland.gov/VoterSearch"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-yellow-400/70 underline-offset-2 hover:text-slate-200"
+            >
+              Maryland State Board of Elections
+            </a>
+            .
+          </p>
+        </footer>
+      </section>
     </main>
   );
 }

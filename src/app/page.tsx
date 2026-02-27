@@ -39,14 +39,14 @@ export default function Home() {
 
         <header className="text-center mb-8 sm:mb-10">
 
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-50 leading-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-50 leading-tight text-balance">
             <span>Baltimore County</span>
             <span className="block sm:inline sm:ml-2">
               Councilmanic District Lookup
             </span>
           </h1>
-          <p className="mt-3 text-sm sm:text-base text-slate-300 max-w-xl mx-auto">
-            Enter your address to see your current and future (2026)<br /> Baltimore
+          <p className="mt-3 text-sm sm:text-base text-slate-300 max-w-xl mx-auto text-balance">
+            Enter your address to see your current and future (2026) Baltimore
             County Council district.
           </p>
         </header>
@@ -59,12 +59,12 @@ export default function Home() {
 
         {result && <LookupResult result={result} />}
 
-        <footer className="mt-10 pt-4 border-t border-slate-700 text-center text-xs sm:text-sm text-slate-400">
-          <p>
+        <footer className="mt-10 pt-4 border-t border-slate-700 text-center text-xs sm:text-sm text-slate-400 space-y-1 text-balance">
+          <p className="text-balance">
             This is an unofficial tool based on Baltimore County GIS data.
-          </p> 
-          <p>You can verify your 2026
-            district with the{" "}
+          </p>
+          <p className="text-balance">
+            You can verify your 2026 district with the{" "}
             <a
               href="https://voterservices.elections.maryland.gov/VoterSearch"
               target="_blank"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, useEffect, useCallback } from "react";
+import { Suspense, useState, FormEvent, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 
 type LookupLogStatus =
@@ -56,7 +56,7 @@ function statusClass(status: LookupLogStatus): string {
   }
 }
 
-export default function AdminLookupsPage() {
+function AdminLookupsContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const [limit, setLimit] = useState("100");
@@ -257,5 +257,13 @@ export default function AdminLookupsPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function AdminLookupsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminLookupsContent />
+    </Suspense>
   );
 }

@@ -40,7 +40,7 @@ Residents can enter a Baltimore County address and see their **current** and **f
 
 ## How it works
 
-1. **Address entry:** The address field autocompletes to USPS addresses (Maryland only) via [Smarty US Autocomplete Pro](https://www.smarty.com/docs/cloud/us-autocomplete-pro-api) when credentials are set. Users can also type a full address and submit.
+1. **Address entry:** The address field autocompletes when [Geoapify](https://www.geoapify.com/) (free) or [Smarty US Autocomplete Pro](https://www.smarty.com/docs/cloud/us-autocomplete-pro-api) is configured. Geoapify is tried first to preserve Smarty allocation. Users can also type a full address and submit.
 2. **Geocode:** The submitted address is geocoded with the US Census geocoder (USPS/MAF-TIGER) first, then Baltimore County’s [AddressPointGeocoder](https://bcgis.baltimorecountymd.gov/arcgis/rest/services/Geocoders/AddressPointGeocoder/GeocodeServer) if needed. Result is WGS84 coordinates.
 3. **Current district:** A spatial query (point-in-polygon) is run against the **Councilmanic Districts** feature layer.
 4. **Future district (2026):** A spatial query is run against the **Bill 55-25 - As Amended** feature layer (9 districts).

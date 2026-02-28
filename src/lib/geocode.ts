@@ -16,7 +16,8 @@ const NOMINATIM_LOOKUP_URL =
 const NOMINATIM_USER_AGENT =
   process.env.NOMINATIM_USER_AGENT || "BaltimoreCountyDistrictLookup/1.0";
 
-const BALTIMORE_COUNTY_BBOX = {
+/** Baltimore County bounding box (lon/lat). Use for bbox filters or point-in-box checks. */
+export const BALTIMORE_COUNTY_BBOX = {
   xmin: -76.78,
   ymin: 39.15,
   xmax: -76.45,

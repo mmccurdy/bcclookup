@@ -63,6 +63,7 @@ export default function AdminLookupsPage() {
   const [items, setItems] = useState<LookupLogEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
 
   const loadLookups = useCallback(async () => {
     if (!token) return;
@@ -95,6 +96,31 @@ export default function AdminLookupsPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     loadLookups();
+  }
+
+  async function handleDelete(index: number) {
+    if (!token) return;
+    setDeletingIndex(index);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/lookups?index=${index}`,
+        { method: "DELETE", headers: { "x-admin-token": token } }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error ?? "Failed to delete.");
+        return;
+      }
+      // Update list locally to avoid jarring scroll jumps.
+      setItems((prev) =>
+        prev ? prev.filter((_, i) => i !== index) : prev
+      );
+    } catch {
+      setError("Network error.");
+    } finally {
+      setDeletingIndex(null);
+    }
   }
 
   return (
@@ -162,13 +188,16 @@ export default function AdminLookupsPage() {
                     <th className="px-4 py-3 font-semibold text-slate-300 whitespace-nowrap">
                       Future
                     </th>
+                    <th className="px-4 py-3 font-semibold text-slate-300 w-20" scope="col">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-4 py-8 text-center text-slate-500"
                       >
                         No lookups recorded yet.
@@ -200,6 +229,17 @@ export default function AdminLookupsPage() {
                         </td>
                         <td className="px-4 py-3 text-slate-300 whitespace-nowrap">
                           {row.futureDistrictId ?? "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(i)}
+                            disabled={deletingIndex !== null}
+                            className="text-slate-500 hover:text-red-400 text-sm px-1 disabled:opacity-40"
+                            aria-label="Delete lookup"
+                          >
+                            {deletingIndex === i ? "…" : "×"}
+                          </button>
                         </td>
                       </tr>
                     ))

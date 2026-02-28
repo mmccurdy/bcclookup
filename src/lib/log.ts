@@ -48,4 +48,24 @@ export async function getRecentLookups(
   }
 }
 
+const LOOKUPS_KEY = "bcclookup:lookups";
+const DELETE_SENTINEL = "\x00__bcclookup_deleted__";
+
+/**
+ * Remove the lookup at the given list index (0 = most recent).
+ * Returns true if a row was removed, false if Redis unavailable or index out of range.
+ */
+export async function deleteLookupByIndex(index: number): Promise<boolean> {
+  if (!redis || index < 0) return false;
+  try {
+    const len = await redis.llen(LOOKUPS_KEY);
+    if (index >= len) return false;
+    await redis.lset(LOOKUPS_KEY, index, DELETE_SENTINEL);
+    await redis.lrem(LOOKUPS_KEY, 1, DELETE_SENTINEL);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 

@@ -49,13 +49,16 @@ export function LookupForm({ onResult, onLoading, loading }: Props) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setSuggestLoading(true);
-      fetch(`/api/suggest?q=${encodeURIComponent(address)}`)
+      const debug = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1";
+      const url = `/api/suggest?q=${encodeURIComponent(address)}${debug ? "&debug=1" : ""}`;
+      fetch(url)
         .then((r) => r.json())
-        .then((data: { suggestions?: string[] }) => {
+        .then((data: { suggestions?: string[]; _debug?: { provider: string; resultCount: number } }) => {
           const list = data.suggestions ?? [];
           setSuggestions(list);
           setSuggestOpen(list.length > 0);
           setHighlightedIndex(-1);
+          if (data._debug) console.log("[suggest]", data._debug);
         })
         .catch(() => setSuggestions([]))
         .finally(() => {
@@ -186,7 +189,9 @@ export function LookupForm({ onResult, onLoading, loading }: Props) {
                 aria-selected={i === highlightedIndex}
                 tabIndex={-1}
                 className={`px-4 py-2.5 cursor-pointer outline-none ${
-                  i === highlightedIndex ? "bg-slate-100 text-slate-900" : "text-slate-800 hover:bg-slate-100"
+                  i === highlightedIndex
+                    ? "bg-amber-100 text-slate-900 ring-1 ring-amber-400/60 ring-inset"
+                    : "text-slate-800 hover:bg-slate-100"
                 }`}
                 onMouseEnter={() => setHighlightedIndex(i)}
                 onMouseDown={(e) => {

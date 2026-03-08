@@ -228,3 +228,49 @@ export async function geocodeAddress(
   if (r) return r;
   return await geocodeNominatim(normalized);
 }
+
+/**
+ * Census doesn't support partial-match autocomplete. When the input looks like a
+ * complete address (street + state/zip), call Census once and return the single
+ * matched address (correct CDP e.g. "Glen Arm") as the only suggestion. Returns
+ * [] when input is incomplete or Census returns 0 or 2+ matches.
+ */
+export async function getCensusAddressSuggestion(input: string): Promise<string[]> {
+  const trimmed = normalizeSpaces(input);
+  if (trimmed.length < 10) return [];
+
+  const comp = parseAddressComponents(trimmed);
+  let data: { result?: { addressMatches?: Array<{ matchedAddress?: string }> } };
+
+  if (comp && comp.street.length >= 5) {
+    const params = new URLSearchParams({
+      street: comp.street,
+      benchmark: "Public_AR_Current",
+      vintage: "Current_Current",
+      format: "json",
+    });
+    if (comp.city) params.set("city", comp.city);
+    if (comp.state) params.set("state", comp.state);
+    if (comp.zip) params.set("zip", comp.zip);
+    const res = await fetch(`${CENSUS_GEOCODER_URL}?${params.toString()}`).catch(() => null);
+    if (!res?.ok) return [];
+    data = await res.json();
+  } else if (/,/.test(trimmed)) {
+    const params = new URLSearchParams({
+      address: trimmed,
+      benchmark: "Public_AR_Current",
+      vintage: "Current_Current",
+      format: "json",
+    });
+    const res = await fetch(`${CENSUS_GEOCODER_URL}?${params.toString()}`).catch(() => null);
+    if (!res?.ok) return [];
+    data = await res.json();
+  } else {
+    return [];
+  }
+
+  const matches = data?.result?.addressMatches ?? [];
+  if (matches.length !== 1) return [];
+  const addr = matches[0].matchedAddress?.trim();
+  return typeof addr === "string" && addr.length > 0 ? [addr] : [];
+}

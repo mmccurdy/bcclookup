@@ -74,9 +74,12 @@ export async function GET(request: NextRequest) {
     futureDistrictId: futureDistrict?.districtId ?? null,
   });
 
+  // Use the geocoder’s normalized address (e.g. Census “Glen Arm”) so the result shows the correct locality, not the suggestion’s “Towson”.
+  const displayAddress = location.address?.trim() ?? address.trim();
+
   return NextResponse.json({
     success: true,
-    address: address.trim(),
+    address: displayAddress,
     location: { x: location.x, y: location.y },
     currentDistrict: currentDistrict ?? undefined,
     futureDistrict: futureDistrict ?? undefined,

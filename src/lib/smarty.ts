@@ -57,6 +57,12 @@ export async function getUSPSAddressSuggestions(
   if (!res?.ok) return [];
 
   const data = await res.json();
+
+  const debugSuggest = process.env.DEBUG_SUGGEST === "1" || process.env.DEBUG_SUGGEST === "true";
+  if (debugSuggest) {
+    console.log("[suggest/smarty] raw response:", JSON.stringify(data, null, 2));
+  }
+
   const suggestions = Array.isArray(data) ? data : data.suggestions ?? data.result ?? [];
   const out: string[] = [];
   const seen = new Set<string>();

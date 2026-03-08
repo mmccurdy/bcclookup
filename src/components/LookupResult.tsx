@@ -4,6 +4,28 @@ import type { LookupResponse, LookupError } from "@/app/page";
 
 type Props = { result: LookupResponse | LookupError };
 
+const STREET_SUFFIXES: Record<string, string> = {
+  RD: "Rd", ST: "St", CT: "Ct", DR: "Dr", LN: "Ln", WAY: "Way",
+  AVE: "Ave", BLVD: "Blvd", HWY: "Hwy", PL: "Pl", CIR: "Cir", TRL: "Trl",
+};
+
+function formatAddressForDisplay(addr: string): string {
+  const parts = addr.split(",").map((p) => p.trim());
+  return parts
+    .map((part) => {
+      if (/^[A-Z]{2}$/i.test(part) || /^\d{5}(-\d{4})?$/.test(part)) return part.toUpperCase();
+      return part
+        .split(/\s+/)
+        .map((word) => {
+          const upper = word.toUpperCase();
+          if (STREET_SUFFIXES[upper]) return STREET_SUFFIXES[upper];
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(" ");
+    })
+    .join(", ");
+}
+
 export function LookupResult({ result }: Props) {
   if (!result.success) {
     return (
@@ -15,11 +37,12 @@ export function LookupResult({ result }: Props) {
   }
 
   const { address, currentDistrict, futureDistrict } = result;
+  const displayAddress = formatAddressForDisplay(address);
 
   return (
     <div className="mt-8 space-y-6">
       <p className="text-slate-200 text-sm">
-        Results for <strong>{address}</strong>
+        Results for <strong>{displayAddress}</strong>
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">

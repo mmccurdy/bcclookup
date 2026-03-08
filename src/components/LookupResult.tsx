@@ -75,7 +75,7 @@ export function LookupResult({ result }: Props) {
               {String(futureDistrict.districtId) === "7" && (
                 <p className="mt-3 pl-3 text-xs sm:text-sm text-yellow-200">
                   <a
-                    href="https://cariforbcc.com"
+                    href="https://cariforcouncil.org/?utm_source=bcclookup&utm_medium=referral&utm_campaign=voter_outreach_2026"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-semibold underline decoration-yellow-300 underline-offset-2 hover:text-yellow-100"

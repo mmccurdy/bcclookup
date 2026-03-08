@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCensusAddressSuggestion } from "@/lib/geocode";
-import { getGeoapifySuggestions } from "@/lib/geoapify";
 import { getMapboxSuggestions } from "@/lib/mapbox";
 import { getPhotonSuggestions } from "@/lib/photon";
 import { getUSPSAddressSuggestions } from "@/lib/smarty";
@@ -31,15 +30,8 @@ export async function GET(request: NextRequest) {
 
   // Census first when input looks complete: returns canonical address (correct CDP e.g. Glen Arm)
   let suggestions = await getCensusAddressSuggestion(trimmed);
-  let provider: "census" | "geoapify" | "mapbox" | "photon" | "smarty" = "census";
+  let provider: "census" | "mapbox" | "photon" | "smarty" = "census";
 
-  const geoapifyDisabled =
-    process.env.DISABLE_GEOAPIFY === "1" || process.env.DISABLE_GEOAPIFY === "true";
-
-  if (suggestions.length === 0 && !geoapifyDisabled) {
-    suggestions = await getGeoapifySuggestions(trimmed, 8);
-    provider = "geoapify";
-  }
   if (suggestions.length === 0 && process.env.MAPBOX_ACCESS_TOKEN?.trim()) {
     if (debug || debugSuggest) console.log("[suggest] trying Mapbox");
     suggestions = await getMapboxSuggestions(trimmed, 8);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (!request.nextUrl.pathname.startsWith("/admin")) {
     return NextResponse.next();
   }
@@ -11,13 +11,14 @@ export function middleware(request: NextRequest) {
     request.nextUrl.searchParams.get("token");
 
   if (!adminToken || !provided || provided !== adminToken) {
-    return new NextResponse(
-      JSON.stringify({ error: "Unauthorized" }),
-      { status: 401, headers: { "Content-Type": "application/json" } }
-    );
+    return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   return NextResponse.next();
 }
 
 export const config = { matcher: ["/admin", "/admin/"] };
+

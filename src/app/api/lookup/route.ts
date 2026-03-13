@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
     await logLookup({
       ts: Date.now(),
       address: trimmed,
-      status: "error",
+      status: "no_location",
       location: null,
       currentDistrictId: null,
       futureDistrictId: null,

@@ -30,3 +30,5 @@ yarn-error.log*
 # IDE
 .idea
 .vscode
+
+tsconfig.tsbuildinfo

@@ -4,7 +4,8 @@ export type LookupLogStatus =
   | "missing_address"
   | "no_location"
   | "no_district"
-  | "success";
+  | "success"
+  | "error";
 
 export type LookupLogEntry = {
   ts: number;

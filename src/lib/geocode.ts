@@ -16,6 +16,9 @@ const NOMINATIM_LOOKUP_URL =
 const NOMINATIM_USER_AGENT =
   process.env.NOMINATIM_USER_AGENT || "BaltimoreCountyDistrictLookup/1.0";
 
+const USE_MAPBOX_GEOCODE =
+  process.env.USE_MAPBOX_GEOCODE === "1" || process.env.USE_MAPBOX_GEOCODE === "true";
+
 /** Baltimore County bounding box (lon/lat). Use for bbox filters or point-in-box checks. */
 export const BALTIMORE_COUNTY_BBOX = {
   xmin: -76.78,
@@ -198,6 +201,23 @@ export async function geocodeAddress(
   const outSR = options?.outSR ?? 4326;
   const normalized = normalizeSpaces(address);
   const variants = addressVariants(address);
+
+  // Optional Mapbox geocode first, when enabled and key is present.
+  // This lets us reuse the same data source as autocomplete for tricky
+  // addresses that Census struggles with.
+  if (USE_MAPBOX_GEOCODE) {
+    try {
+      const { geocodeWithMapbox } = await import("./mapbox");
+      for (const v of variants) {
+        const r = await geocodeWithMapbox(v);
+        if (r && typeof r.x === "number" && typeof r.y === "number") {
+          return { x: r.x, y: r.y, wkid: 4326, address: r.address };
+        }
+      }
+    } catch {
+      // If Mapbox fails for any reason, silently fall back to Census/BC/Nominatim.
+    }
+  }
 
   // Census component API works better for "Street, City, ST ZIP" style addresses
   for (const v of variants) {

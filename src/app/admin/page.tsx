@@ -7,7 +7,9 @@ type LookupLogStatus =
   | "missing_address"
   | "no_location"
   | "no_district"
-  | "success";
+  | "success"
+  | "error"
+  | "rate_limited";
 
 type LookupLogEntry = {
   ts: number;
@@ -16,6 +18,9 @@ type LookupLogEntry = {
   location?: { x: number; y: number } | null;
   currentDistrictId?: string | null;
   futureDistrictId?: string | null;
+  ip?: string | null;
+  ua?: string | null;
+  referer?: string | null;
 };
 
 function formatDate(ts: number): string {
@@ -36,6 +41,10 @@ function statusLabel(status: LookupLogStatus): string {
       return "No district";
     case "missing_address":
       return "Missing address";
+    case "error":
+      return "Error";
+    case "rate_limited":
+      return "Rate limited";
     default:
       return status;
   }
@@ -51,6 +60,10 @@ function statusClass(status: LookupLogStatus): string {
       return "bg-orange-500/20 text-orange-300 border-orange-500/40";
     case "missing_address":
       return "bg-slate-500/20 text-slate-400 border-slate-500/40";
+    case "error":
+      return "bg-red-500/20 text-red-300 border-red-500/40";
+    case "rate_limited":
+      return "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40";
     default:
       return "bg-slate-500/20 text-slate-400 border-slate-500/40";
   }
@@ -129,7 +142,8 @@ function AdminLookupsContent() {
         <header className="mb-8">
           <h1 className="text-2xl font-bold text-slate-50">Lookup logs</h1>
           <p className="mt-1 text-sm text-slate-400">
-            View recent address lookups stored in Redis. Pass the admin token as{" "}
+            View recent address lookups stored in Redis (includes IP and
+            User-Agent for bot investigation). Pass the admin token as{" "}
             <code className="text-slate-300">?token=…</code> or{" "}
             <code className="text-slate-300">x-admin-token</code> header.
           </p>
@@ -183,6 +197,12 @@ function AdminLookupsContent() {
                       Status
                     </th>
                     <th className="px-4 py-3 font-semibold text-slate-300 whitespace-nowrap">
+                      IP
+                    </th>
+                    <th className="px-4 py-3 font-semibold text-slate-300">
+                      User-Agent
+                    </th>
+                    <th className="px-4 py-3 font-semibold text-slate-300 whitespace-nowrap">
                       Current
                     </th>
                     <th className="px-4 py-3 font-semibold text-slate-300 whitespace-nowrap">
@@ -197,7 +217,7 @@ function AdminLookupsContent() {
                   {items.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={8}
                         className="px-4 py-8 text-center text-slate-500"
                       >
                         No lookups recorded yet.
@@ -223,6 +243,18 @@ function AdminLookupsContent() {
                           >
                             {statusLabel(row.status)}
                           </span>
+                        </td>
+                        <td
+                          className="px-4 py-3 text-slate-300 font-mono text-xs whitespace-nowrap"
+                          title={row.referer ?? undefined}
+                        >
+                          {row.ip ?? "—"}
+                        </td>
+                        <td
+                          className="px-4 py-3 text-slate-400 max-w-[14rem] truncate text-xs"
+                          title={row.ua ?? undefined}
+                        >
+                          {row.ua || "—"}
                         </td>
                         <td className="px-4 py-3 text-slate-300 whitespace-nowrap">
                           {row.currentDistrictId ?? "—"}

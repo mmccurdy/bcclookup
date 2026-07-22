@@ -2,24 +2,53 @@ import { NextRequest, NextResponse } from "next/server";
 import { geocodeAddress } from "@/lib/geocode";
 import { getCurrentDistrict, getFutureDistrict } from "@/lib/districts";
 import { logLookup } from "@/lib/log";
+import {
+  checkLookupRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
+import { getRequestMeta } from "@/lib/request-meta";
 
 export async function GET(request: NextRequest) {
+  const meta = getRequestMeta(request);
   const address = request.nextUrl.searchParams.get("address");
   const debug = request.nextUrl.searchParams.get("debug") === "1";
-  const debugLookup = process.env.DEBUG_LOOKUP === "1" || process.env.DEBUG_LOOKUP === "true";
+  const debugLookup =
+    process.env.DEBUG_LOOKUP === "1" || process.env.DEBUG_LOOKUP === "true";
+
+  const rate = await checkLookupRateLimit(meta.ip);
+  if (!rate.success) {
+    console.warn(
+      `[lookup] rate_limited ip=${meta.ip} ua=${meta.ua ?? ""} address=${address ?? ""}`
+    );
+    await logLookup(
+      {
+        ts: Date.now(),
+        address: address?.trim() ?? "",
+        status: "rate_limited",
+        location: null,
+        currentDistrictId: null,
+        futureDistrictId: null,
+      },
+      meta
+    );
+    return rateLimitResponse(rate);
+  }
 
   if (!address || typeof address !== "string" || !address.trim()) {
     if (debug || debugLookup) {
       console.log("[lookup] missing or empty address:", address);
     }
-    await logLookup({
-      ts: Date.now(),
-      address: address ?? "",
-      status: "missing_address",
-      location: null,
-      currentDistrictId: null,
-      futureDistrictId: null,
-    });
+    await logLookup(
+      {
+        ts: Date.now(),
+        address: address ?? "",
+        status: "missing_address",
+        location: null,
+        currentDistrictId: null,
+        futureDistrictId: null,
+      },
+      meta
+    );
     return NextResponse.json(
       { success: false, error: "Missing or empty address." },
       { status: 400 }
@@ -34,14 +63,17 @@ export async function GET(request: NextRequest) {
       if (debug || debugLookup) {
         console.log("[lookup] no_location from geocodeAddress for:", trimmed);
       }
-      await logLookup({
-        ts: Date.now(),
-        address: trimmed,
-        status: "no_location",
-        location: null,
-        currentDistrictId: null,
-        futureDistrictId: null,
-      });
+      await logLookup(
+        {
+          ts: Date.now(),
+          address: trimmed,
+          status: "no_location",
+          location: null,
+          currentDistrictId: null,
+          futureDistrictId: null,
+        },
+        meta
+      );
       const body: {
         success: false;
         error: string;
@@ -70,14 +102,17 @@ export async function GET(request: NextRequest) {
           y: location.y,
         });
       }
-      await logLookup({
-        ts: Date.now(),
-        address: trimmed,
-        status: "no_district",
-        location: { x: location.x, y: location.y },
-        currentDistrictId: null,
-        futureDistrictId: null,
-      });
+      await logLookup(
+        {
+          ts: Date.now(),
+          address: trimmed,
+          status: "no_district",
+          location: { x: location.x, y: location.y },
+          currentDistrictId: null,
+          futureDistrictId: null,
+        },
+        meta
+      );
       const body: {
         success: false;
         error: string;
@@ -96,14 +131,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(body, { status: 200 });
     }
 
-    await logLookup({
-      ts: Date.now(),
-      address: trimmed,
-      status: "success",
-      location: { x: location.x, y: location.y },
-      currentDistrictId: currentDistrict?.districtId ?? null,
-      futureDistrictId: futureDistrict?.districtId ?? null,
-    });
+    await logLookup(
+      {
+        ts: Date.now(),
+        address: trimmed,
+        status: "success",
+        location: { x: location.x, y: location.y },
+        currentDistrictId: currentDistrict?.districtId ?? null,
+        futureDistrictId: futureDistrict?.districtId ?? null,
+      },
+      meta
+    );
 
     // Use the geocoder’s normalized address (e.g. Census “Glen Arm”) so the result shows the correct locality, not the suggestion’s “Towson”.
     const displayAddress = location.address?.trim() ?? trimmed;
@@ -131,23 +169,29 @@ export async function GET(request: NextRequest) {
       };
     }
     if (debug || debugLookup) {
-      console.log("[lookup] success:", body._debug ?? {
-        location: { x: location.x, y: location.y },
-        currentDistrictId: currentDistrict?.districtId ?? null,
-        futureDistrictId: futureDistrict?.districtId ?? null,
-      });
+      console.log(
+        "[lookup] success:",
+        body._debug ?? {
+          location: { x: location.x, y: location.y },
+          currentDistrictId: currentDistrict?.districtId ?? null,
+          futureDistrictId: futureDistrict?.districtId ?? null,
+        }
+      );
     }
     return NextResponse.json(body);
   } catch (err) {
     console.error("[lookup] unhandled error for address:", trimmed, err);
-    await logLookup({
-      ts: Date.now(),
-      address: trimmed,
-      status: "no_location",
-      location: null,
-      currentDistrictId: null,
-      futureDistrictId: null,
-    });
+    await logLookup(
+      {
+        ts: Date.now(),
+        address: trimmed,
+        status: "error",
+        location: null,
+        currentDistrictId: null,
+        futureDistrictId: null,
+      },
+      meta
+    );
     const body: {
       success: false;
       error: string;

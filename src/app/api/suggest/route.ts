@@ -3,6 +3,11 @@ import { getCensusAddressSuggestion } from "@/lib/geocode";
 import { getMapboxSuggestions } from "@/lib/mapbox";
 import { getPhotonSuggestions } from "@/lib/photon";
 import { getUSPSAddressSuggestions } from "@/lib/smarty";
+import {
+  checkSuggestRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
+import { getRequestMeta } from "@/lib/request-meta";
 
 /** Strip redundant US country suffix from address strings (all suggestions are US). */
 function stripCountrySuffix(s: string): string {
@@ -17,16 +22,29 @@ function stripCountrySuffix(s: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const q = request.nextUrl.searchParams.get("q") ?? request.nextUrl.searchParams.get("address");
+  const meta = getRequestMeta(request);
+  const q =
+    request.nextUrl.searchParams.get("q") ??
+    request.nextUrl.searchParams.get("address");
   const debug = request.nextUrl.searchParams.get("debug") === "1";
+
+  const rate = await checkSuggestRateLimit(meta.ip);
+  if (!rate.success) {
+    console.warn(
+      `[suggest] rate_limited ip=${meta.ip} ua=${meta.ua ?? ""} q=${q ?? ""}`
+    );
+    return rateLimitResponse(rate, "Too many suggestion requests. Please slow down.");
+  }
 
   if (!q || typeof q !== "string") {
     return NextResponse.json({ suggestions: [] });
   }
 
   const trimmed = q.trim();
-  const debugSuggest = process.env.DEBUG_SUGGEST === "1" || process.env.DEBUG_SUGGEST === "true";
-  if (debugSuggest) console.log("[suggest] DEBUG_SUGGEST is on, q=", JSON.stringify(trimmed));
+  const debugSuggest =
+    process.env.DEBUG_SUGGEST === "1" || process.env.DEBUG_SUGGEST === "true";
+  if (debugSuggest)
+    console.log("[suggest] DEBUG_SUGGEST is on, q=", JSON.stringify(trimmed));
 
   // Census first when input looks complete: returns canonical address (correct CDP e.g. Glen Arm)
   let suggestions = await getCensusAddressSuggestion(trimmed);
@@ -49,12 +67,17 @@ export async function GET(request: NextRequest) {
   }
 
   if (debug || debugSuggest) {
-    console.log(`[suggest] q="${trimmed}" provider=${provider} resultCount=${suggestions.length}`);
+    console.log(
+      `[suggest] q="${trimmed}" provider=${provider} resultCount=${suggestions.length} ip=${meta.ip}`
+    );
   }
 
   const normalized = suggestions.map(stripCountrySuffix);
 
-  const body: { suggestions: string[]; _debug?: { provider: string; resultCount: number } } = {
+  const body: {
+    suggestions: string[];
+    _debug?: { provider: string; resultCount: number };
+  } = {
     suggestions: normalized,
   };
   if (debug) body._debug = { provider, resultCount: suggestions.length };

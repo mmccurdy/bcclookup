@@ -1,11 +1,13 @@
-import { Redis } from "@upstash/redis";
+import { redis } from "@/lib/redis";
+import type { RequestMeta } from "@/lib/request-meta";
 
 export type LookupLogStatus =
   | "missing_address"
   | "no_location"
   | "no_district"
   | "success"
-  | "error";
+  | "error"
+  | "rate_limited";
 
 export type LookupLogEntry = {
   ts: number;
@@ -14,20 +16,37 @@ export type LookupLogEntry = {
   location?: { x: number; y: number } | null;
   currentDistrictId?: string | null;
   futureDistrictId?: string | null;
+  /** Client IP (best-effort from proxy headers). */
+  ip?: string | null;
+  /** User-Agent header. */
+  ua?: string | null;
+  /** Referer header, useful for spotting scripted callers. */
+  referer?: string | null;
 };
 
-const redis =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      })
-    : null;
+const LOOKUPS_KEY = "bcclookup:lookups";
+const DELETE_SENTINEL = "\x00__bcclookup_deleted__";
+/** Keep the Redis list bounded so bot floods don't grow storage forever. */
+const MAX_LOG_ENTRIES = 2000;
 
-export async function logLookup(entry: LookupLogEntry): Promise<void> {
+export async function logLookup(
+  entry: LookupLogEntry,
+  meta?: RequestMeta
+): Promise<void> {
   if (!redis) return;
+  const payload: LookupLogEntry = meta
+    ? {
+        ...entry,
+        ip: meta.ip,
+        ua: meta.ua,
+        referer: meta.referer,
+      }
+    : entry;
   try {
-    await redis.lpush("bcclookup:lookups", entry);
+    const pipeline = redis.pipeline();
+    pipeline.lpush(LOOKUPS_KEY, payload);
+    pipeline.ltrim(LOOKUPS_KEY, 0, MAX_LOG_ENTRIES - 1);
+    await pipeline.exec();
   } catch {
     // Logging is best-effort; ignore errors (e.g., Redis not configured).
   }
@@ -39,7 +58,7 @@ export async function getRecentLookups(
   if (!redis) return [];
   try {
     const items = await redis.lrange<LookupLogEntry>(
-      "bcclookup:lookups",
+      LOOKUPS_KEY,
       0,
       limit - 1
     );
@@ -48,9 +67,6 @@ export async function getRecentLookups(
     return [];
   }
 }
-
-const LOOKUPS_KEY = "bcclookup:lookups";
-const DELETE_SENTINEL = "\x00__bcclookup_deleted__";
 
 /**
  * Remove the lookup at the given list index (0 = most recent).
@@ -68,5 +84,3 @@ export async function deleteLookupByIndex(index: number): Promise<boolean> {
     return false;
   }
 }
-
-

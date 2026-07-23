@@ -138,7 +138,7 @@ function AdminLookupsContent() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 px-4 py-10">
-      <div className="max-w-5xl mx-auto">
+      <div className="w-full max-w-none mx-auto">
         <header className="mb-8">
           <h1 className="text-2xl font-bold text-slate-50">Lookup logs</h1>
           <p className="mt-1 text-sm text-slate-400">
@@ -232,7 +232,7 @@ function AdminLookupsContent() {
                         <td className="px-4 py-3 text-slate-400 whitespace-nowrap">
                           {formatDate(row.ts)}
                         </td>
-                        <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={row.address}>
+                        <td className="px-4 py-3 text-slate-200 max-w-md truncate" title={row.address}>
                           {row.address || "—"}
                         </td>
                         <td className="px-4 py-3">
@@ -251,7 +251,7 @@ function AdminLookupsContent() {
                           {row.ip ?? "—"}
                         </td>
                         <td
-                          className="px-4 py-3 text-slate-400 max-w-[14rem] truncate text-xs"
+                          className="px-4 py-3 text-slate-400 max-w-xl truncate text-xs"
                           title={row.ua ?? undefined}
                         >
                           {row.ua || "—"}

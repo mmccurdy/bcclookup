@@ -251,7 +251,7 @@ function AdminLookupsContent() {
                           {row.ip ?? "—"}
                         </td>
                         <td
-                          className="px-4 py-3 text-slate-400 max-w-xl truncate text-xs"
+                          className="px-4 py-3 text-slate-400 max-w-[10rem] truncate text-xs"
                           title={row.ua ?? undefined}
                         >
                           {row.ua || "—"}

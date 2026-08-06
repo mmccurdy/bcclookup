@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { geocodeAddress } from "@/lib/geocode";
+import {
+  geocodeAddress,
+  geocodeAddressCandidates,
+  type GeocodeResult,
+} from "@/lib/geocode";
 import { getCurrentDistrict, getFutureDistrict } from "@/lib/districts";
 import { logLookup } from "@/lib/log";
 import {
@@ -7,6 +11,10 @@ import {
   rateLimitResponse,
 } from "@/lib/rate-limit";
 import { getRequestMeta } from "@/lib/request-meta";
+
+function pointKey(p: { x: number; y: number }): string {
+  return `${p.x.toFixed(5)},${p.y.toFixed(5)}`;
+}
 
 export async function GET(request: NextRequest) {
   const meta = getRequestMeta(request);
@@ -58,8 +66,8 @@ export async function GET(request: NextRequest) {
   const trimmed = address.trim();
 
   try {
-    const location = await geocodeAddress(trimmed);
-    if (!location) {
+    const first = await geocodeAddress(trimmed);
+    if (!first) {
       if (debug || debugLookup) {
         console.log("[lookup] no_location from geocodeAddress for:", trimmed);
       }
@@ -89,17 +97,53 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(body, { status: 200 });
     }
 
-    const [currentDistrict, futureDistrict] = await Promise.all([
-      getCurrentDistrict(location.x, location.y),
-      getFutureDistrict(location.x, location.y),
-    ]);
+    // Try the primary geocode, then alternate providers if this point misses
+    // both district layers (common for large campuses where OSM ≠ Census).
+    const tried = new Set<string>();
+    const queue: GeocodeResult[] = [first];
+    let location: GeocodeResult | null = null;
+    let currentDistrict = null as Awaited<ReturnType<typeof getCurrentDistrict>>;
+    let futureDistrict = null as Awaited<ReturnType<typeof getFutureDistrict>>;
+    let loadedAlternates = false;
 
-    const hasAnyDistrict = currentDistrict != null || futureDistrict != null;
-    if (!hasAnyDistrict) {
+    while (queue.length > 0) {
+      const candidate = queue.shift()!;
+      const key = pointKey(candidate);
+      if (tried.has(key)) continue;
+      tried.add(key);
+
+      const [current, future] = await Promise.all([
+        getCurrentDistrict(candidate.x, candidate.y),
+        getFutureDistrict(candidate.x, candidate.y),
+      ]);
+
+      if (current != null || future != null) {
+        location = candidate;
+        currentDistrict = current;
+        futureDistrict = future;
+        break;
+      }
+
+      if (!loadedAlternates) {
+        loadedAlternates = true;
+        const alternates = await geocodeAddressCandidates(trimmed);
+        for (const alt of alternates) {
+          if (!tried.has(pointKey(alt))) queue.push(alt);
+        }
+        if (debug || debugLookup) {
+          console.log(
+            "[lookup] primary geocode missed districts; trying",
+            alternates.length,
+            "candidates"
+          );
+        }
+      }
+    }
+
+    if (!location) {
       if (debug || debugLookup) {
-        console.log("[lookup] no_district for coords:", {
-          x: location.x,
-          y: location.y,
+        console.log("[lookup] no_district for any geocode candidate:", {
+          tried: [...tried],
         });
       }
       await logLookup(
@@ -107,7 +151,7 @@ export async function GET(request: NextRequest) {
           ts: Date.now(),
           address: trimmed,
           status: "no_district",
-          location: { x: location.x, y: location.y },
+          location: { x: first.x, y: first.y },
           currentDistrictId: null,
           futureDistrictId: null,
         },
@@ -125,7 +169,8 @@ export async function GET(request: NextRequest) {
       if (debug) {
         body._debug = {
           stage: "district_lookup",
-          location: { x: location.x, y: location.y },
+          location: { x: first.x, y: first.y },
+          triedCandidates: [...tried],
         };
       }
       return NextResponse.json(body, { status: 200 });
@@ -166,6 +211,7 @@ export async function GET(request: NextRequest) {
         location: { x: location.x, y: location.y },
         currentDistrictId: currentDistrict?.districtId ?? null,
         futureDistrictId: futureDistrict?.districtId ?? null,
+        triedCandidates: [...tried],
       };
     }
     if (debug || debugLookup) {

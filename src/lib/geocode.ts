@@ -74,26 +74,93 @@ type AddressComponents = {
   zip?: string;
 };
 
+/** Map common full state names → USPS abbreviations (Census wants 2-letter codes). */
+const STATE_NAME_TO_ABBR: Record<string, string> = {
+  alabama: "AL",
+  alaska: "AK",
+  arizona: "AZ",
+  arkansas: "AR",
+  california: "CA",
+  colorado: "CO",
+  connecticut: "CT",
+  delaware: "DE",
+  florida: "FL",
+  georgia: "GA",
+  hawaii: "HI",
+  idaho: "ID",
+  illinois: "IL",
+  indiana: "IN",
+  iowa: "IA",
+  kansas: "KS",
+  kentucky: "KY",
+  louisiana: "LA",
+  maine: "ME",
+  maryland: "MD",
+  massachusetts: "MA",
+  michigan: "MI",
+  minnesota: "MN",
+  mississippi: "MS",
+  missouri: "MO",
+  montana: "MT",
+  nebraska: "NE",
+  nevada: "NV",
+  "new hampshire": "NH",
+  "new jersey": "NJ",
+  "new mexico": "NM",
+  "new york": "NY",
+  "north carolina": "NC",
+  "north dakota": "ND",
+  ohio: "OH",
+  oklahoma: "OK",
+  oregon: "OR",
+  pennsylvania: "PA",
+  "rhode island": "RI",
+  "south carolina": "SC",
+  "south dakota": "SD",
+  tennessee: "TN",
+  texas: "TX",
+  utah: "UT",
+  vermont: "VT",
+  virginia: "VA",
+  washington: "WA",
+  "west virginia": "WV",
+  wisconsin: "WI",
+  wyoming: "WY",
+  "district of columbia": "DC",
+};
+
+function normalizeStateToken(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase();
+  return STATE_NAME_TO_ABBR[t.toLowerCase()] ?? null;
+}
+
 /**
  * Parse "Street, City, ST ZIP" or "Street, City, State ZIP" into components.
  * Census geocoder works more reliably with components than single-line for many addresses.
+ * Accepts both "MD" and "Maryland".
  */
 function parseAddressComponents(address: string): AddressComponents | null {
   const n = normalizeSpaces(address);
   if (!n || !/,/.test(n)) return null;
   const parts = n.split(",").map((p) => p.trim()).filter(Boolean);
   if (parts.length < 2) return null;
-  // Last part is typically "ST ZIP" or "State ZIP"
+  // Last part is typically "ST ZIP", "State ZIP", or state alone
   const last = parts[parts.length - 1];
-  const stateZipMatch = last.match(/^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/);
-  const stateOnly = last.match(/^([A-Za-z]{2})\s*$/);
+  const stateZipMatch = last.match(/^(.+?)\s+(\d{5}(?:-\d{4})?)\s*$/);
+  const stateOnly = last.match(/^([A-Za-z][A-Za-z\s]*?)\s*$/);
   let state: string | undefined;
   let zip: string | undefined;
   if (stateZipMatch) {
-    state = stateZipMatch[1].toUpperCase();
+    const normalized = normalizeStateToken(stateZipMatch[1]);
+    if (!normalized) return null;
+    state = normalized;
     zip = stateZipMatch[2];
   } else if (stateOnly) {
-    state = stateOnly[1].toUpperCase();
+    const normalized = normalizeStateToken(stateOnly[1]);
+    if (!normalized) return null;
+    state = normalized;
   } else {
     return null;
   }
@@ -102,6 +169,18 @@ function parseAddressComponents(address: string): AddressComponents | null {
   const city = parts.length >= 3 ? parts[1].trim() : undefined;
   if (!street) return null;
   return { street, city, state, zip };
+}
+
+function candidateKey(r: GeocodeResult): string {
+  return `${r.x.toFixed(5)},${r.y.toFixed(5)}`;
+}
+
+function pushUnique(out: GeocodeResult[], seen: Set<string>, r: GeocodeResult | null) {
+  if (!r || typeof r.x !== "number" || typeof r.y !== "number") return;
+  const key = candidateKey(r);
+  if (seen.has(key)) return;
+  seen.add(key);
+  out.push(r);
 }
 
 async function geocodeBC(singleLine: string, outSR: number): Promise<GeocodeResult | null> {
@@ -190,9 +269,67 @@ async function geocodeNominatim(address: string): Promise<GeocodeResult | null> 
 }
 
 /**
+ * Collect geocode candidates from multiple providers (Census preferred).
+ * Large campuses (e.g. hospitals) often geocode to different points across providers;
+ * callers should try candidates until a district hit is found.
+ *
+ * Prefer geocodeAddress() first for the common case; use this when that point
+ * misses both district layers.
+ */
+export async function geocodeAddressCandidates(
+  address: string,
+  options?: { outSR?: number }
+): Promise<GeocodeResult[]> {
+  const outSR = options?.outSR ?? 4326;
+  const normalized = normalizeSpaces(address);
+  const variants = addressVariants(address);
+  const out: GeocodeResult[] = [];
+  const seen = new Set<string>();
+
+  if (USE_MAPBOX_GEOCODE) {
+    try {
+      const { geocodeWithMapbox } = await import("./mapbox");
+      for (const v of variants) {
+        const r = await geocodeWithMapbox(v);
+        if (r) pushUnique(out, seen, { x: r.x, y: r.y, wkid: 4326, address: r.address });
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  for (const v of variants) {
+    const comp = parseAddressComponents(v);
+    if (comp) {
+      pushUnique(out, seen, await geocodeCensusComponents(comp, outSR));
+    }
+  }
+  for (const v of variants) {
+    pushUnique(out, seen, await geocodeCensusSingleLine(v, outSR));
+  }
+  for (const v of variants) {
+    pushUnique(out, seen, await geocodeBC(v, outSR));
+  }
+  for (const v of variants) {
+    pushUnique(out, seen, await geocodeNominatim(v));
+  }
+
+  if (out.length === 0) {
+    const comp = parseAddressComponents(normalized);
+    if (comp) {
+      pushUnique(out, seen, await geocodeCensusComponents(comp, outSR));
+    }
+    pushUnique(out, seen, await geocodeCensusSingleLine(normalized, outSR));
+    pushUnique(out, seen, await geocodeNominatim(normalized));
+  }
+
+  return out;
+}
+
+/**
  * Geocode an address using Census, then BC, then Nominatim. Returns WGS84 (x=lon, y=lat).
- * We accept the first result; the district layers are the source of truth for councilmanic district.
- * Census is tried with parsed components first (street, city, state, zip) when possible, then single-line.
+ * First successful provider wins. For campuses where providers disagree, use
+ * geocodeAddressCandidates and try until a district hit.
  */
 export async function geocodeAddress(
   address: string,
@@ -202,9 +339,6 @@ export async function geocodeAddress(
   const normalized = normalizeSpaces(address);
   const variants = addressVariants(address);
 
-  // Optional Mapbox geocode first, when enabled and key is present.
-  // This lets us reuse the same data source as autocomplete for tricky
-  // addresses that Census struggles with.
   if (USE_MAPBOX_GEOCODE) {
     try {
       const { geocodeWithMapbox } = await import("./mapbox");
@@ -219,7 +353,6 @@ export async function geocodeAddress(
     }
   }
 
-  // Census component API works better for "Street, City, ST ZIP" style addresses
   for (const v of variants) {
     const comp = parseAddressComponents(v);
     if (comp) {

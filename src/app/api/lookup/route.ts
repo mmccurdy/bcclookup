@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   geocodeAddress,
   geocodeAddressCandidates,
+  getCensusCountyAtPoint,
+  isBaltimoreCityGeocode,
   type GeocodeResult,
 } from "@/lib/geocode";
 import { getCurrentDistrict, getFutureDistrict } from "@/lib/districts";
@@ -14,6 +16,57 @@ import { getRequestMeta } from "@/lib/request-meta";
 
 function pointKey(p: { x: number; y: number }): string {
   return `${p.x.toFixed(5)},${p.y.toFixed(5)}`;
+}
+
+const GENERIC_OUTSIDE_COUNTY_ERROR =
+  "We couldn't determine a Baltimore County councilmanic district for this address. It may be outside Baltimore County or our data may be incomplete.";
+
+const BALTIMORE_CITY_ERROR =
+  "This address appears to be in Baltimore City, not Baltimore County. This tool only covers Baltimore County councilmanic districts.";
+
+const BALTIMORE_CITY_HELP_LINK = {
+  href: "https://www.baltimorecity.gov/boe/our-work/election-information",
+  label: "Find more info about your local elections here.",
+};
+
+async function outsideCountyError(
+  points: GeocodeResult[]
+): Promise<{
+  error: string;
+  helpLink?: { href: string; label: string };
+  countyGeoid?: string | null;
+  countyName?: string | null;
+}> {
+  for (const p of points) {
+    if (isBaltimoreCityGeocode(p)) {
+      return {
+        error: BALTIMORE_CITY_ERROR,
+        helpLink: BALTIMORE_CITY_HELP_LINK,
+        countyGeoid: p.countyGeoid,
+        countyName: p.countyName,
+      };
+    }
+  }
+  const probe = points[0];
+  if (probe) {
+    const county = await getCensusCountyAtPoint(probe.x, probe.y);
+    if (county && isBaltimoreCityGeocode(county)) {
+      return {
+        error: BALTIMORE_CITY_ERROR,
+        helpLink: BALTIMORE_CITY_HELP_LINK,
+        countyGeoid: county.countyGeoid,
+        countyName: county.countyName,
+      };
+    }
+    if (county) {
+      return {
+        error: GENERIC_OUTSIDE_COUNTY_ERROR,
+        countyGeoid: county.countyGeoid,
+        countyName: county.countyName,
+      };
+    }
+  }
+  return { error: GENERIC_OUTSIDE_COUNTY_ERROR };
 }
 
 export async function GET(request: NextRequest) {
@@ -99,7 +152,8 @@ export async function GET(request: NextRequest) {
 
     // Try the primary geocode, then alternate providers if this point misses
     // both district layers (common for large campuses where OSM ≠ Census).
-    const tried = new Set<string>();
+    const triedKeys = new Set<string>();
+    const triedResults: GeocodeResult[] = [];
     const queue: GeocodeResult[] = [first];
     let location: GeocodeResult | null = null;
     let currentDistrict = null as Awaited<ReturnType<typeof getCurrentDistrict>>;
@@ -109,8 +163,9 @@ export async function GET(request: NextRequest) {
     while (queue.length > 0) {
       const candidate = queue.shift()!;
       const key = pointKey(candidate);
-      if (tried.has(key)) continue;
-      tried.add(key);
+      if (triedKeys.has(key)) continue;
+      triedKeys.add(key);
+      triedResults.push(candidate);
 
       const [current, future] = await Promise.all([
         getCurrentDistrict(candidate.x, candidate.y),
@@ -128,7 +183,7 @@ export async function GET(request: NextRequest) {
         loadedAlternates = true;
         const alternates = await geocodeAddressCandidates(trimmed);
         for (const alt of alternates) {
-          if (!tried.has(pointKey(alt))) queue.push(alt);
+          if (!triedKeys.has(pointKey(alt))) queue.push(alt);
         }
         if (debug || debugLookup) {
           console.log(
@@ -143,9 +198,10 @@ export async function GET(request: NextRequest) {
     if (!location) {
       if (debug || debugLookup) {
         console.log("[lookup] no_district for any geocode candidate:", {
-          tried: [...tried],
+          tried: [...triedKeys],
         });
       }
+      const outside = await outsideCountyError(triedResults);
       await logLookup(
         {
           ts: Date.now(),
@@ -160,17 +216,20 @@ export async function GET(request: NextRequest) {
       const body: {
         success: false;
         error: string;
+        helpLink?: { href: string; label: string };
         _debug?: Record<string, unknown>;
       } = {
         success: false,
-        error:
-          "We couldn't determine a Baltimore County councilmanic district for this address. It may be outside Baltimore County or our data may be incomplete.",
+        error: outside.error,
+        ...(outside.helpLink ? { helpLink: outside.helpLink } : {}),
       };
       if (debug) {
         body._debug = {
           stage: "district_lookup",
           location: { x: first.x, y: first.y },
-          triedCandidates: [...tried],
+          triedCandidates: [...triedKeys],
+          countyGeoid: outside.countyGeoid ?? null,
+          countyName: outside.countyName ?? null,
         };
       }
       return NextResponse.json(body, { status: 200 });
@@ -211,7 +270,7 @@ export async function GET(request: NextRequest) {
         location: { x: location.x, y: location.y },
         currentDistrictId: currentDistrict?.districtId ?? null,
         futureDistrictId: futureDistrict?.districtId ?? null,
-        triedCandidates: [...tried],
+        triedCandidates: [...triedKeys],
       };
     }
     if (debug || debugLookup) {

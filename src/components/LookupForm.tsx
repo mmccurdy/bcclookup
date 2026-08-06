@@ -13,6 +13,7 @@ export type LookupResponse = {
 export type LookupError = {
   success: false;
   error: string;
+  helpLink?: { href: string; label: string };
 };
 
 type Props = {

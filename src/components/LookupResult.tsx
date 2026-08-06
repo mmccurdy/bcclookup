@@ -32,6 +32,18 @@ export function LookupResult({ result }: Props) {
       <div className="mt-8 rounded-xl border border-red-500/60 bg-red-950/70 px-4 py-3 text-sm text-red-100 shadow-md shadow-black/40">
         <p className="font-medium">We hit a snag.</p>
         <p className="mt-1 text-red-100/90">{result.error}</p>
+        {result.helpLink && (
+          <p className="mt-2 text-red-100/90">
+            <a
+              href={result.helpLink.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium underline decoration-red-300/80 underline-offset-2 hover:text-white"
+            >
+              {result.helpLink.label}
+            </a>
+          </p>
+        )}
       </div>
     );
   }

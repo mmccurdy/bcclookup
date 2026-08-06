@@ -41,7 +41,22 @@ export type GeocodeResult = {
   y: number;
   wkid?: number;
   address?: string;
+  /** Census county GEOID when available (e.g. 24510 = Baltimore city, 24005 = Baltimore County). */
+  countyGeoid?: string | null;
+  countyName?: string | null;
 };
+
+/** Baltimore city (independent city) — not Baltimore County. */
+export const BALTIMORE_CITY_COUNTY_GEOID = "24510";
+
+export function isBaltimoreCityGeocode(r: {
+  countyGeoid?: string | null;
+  countyName?: string | null;
+}): boolean {
+  if (r.countyGeoid === BALTIMORE_CITY_COUNTY_GEOID) return true;
+  const name = r.countyName?.toLowerCase() ?? "";
+  return name === "baltimore city" || name.startsWith("baltimore city");
+}
 
 function normalizeSpaces(s: string): string {
   return s.trim().replace(/\s+/g, " ");
@@ -138,7 +153,7 @@ function normalizeStateToken(raw: string): string | null {
 
 /**
  * Parse "Street, City, ST ZIP" or "Street, City, State ZIP" into components.
- * Census geocoder works more reliably with components than single-line for many addresses.
+ * Also accepts Census-style "Street, City, ST, ZIP" (state and ZIP as separate comma fields).
  * Accepts both "MD" and "Maryland".
  */
 function parseAddressComponents(address: string): AddressComponents | null {
@@ -146,12 +161,32 @@ function parseAddressComponents(address: string): AddressComponents | null {
   if (!n || !/,/.test(n)) return null;
   const parts = n.split(",").map((p) => p.trim()).filter(Boolean);
   if (parts.length < 2) return null;
+
+  let state: string | undefined;
+  let zip: string | undefined;
+  let city: string | undefined;
+  const street = parts[0].trim();
+  if (!street) return null;
+
+  // Census-style: "Street, City, ST, ZIP"
+  if (parts.length >= 4) {
+    const maybeZip = parts[parts.length - 1];
+    const maybeState = parts[parts.length - 2];
+    if (/^\d{5}(?:-\d{4})?$/.test(maybeZip)) {
+      const normalized = normalizeStateToken(maybeState);
+      if (normalized) {
+        state = normalized;
+        zip = maybeZip;
+        city = parts.length >= 4 ? parts.slice(1, -2).join(", ") : undefined;
+        return { street, city: city || undefined, state, zip };
+      }
+    }
+  }
+
   // Last part is typically "ST ZIP", "State ZIP", or state alone
   const last = parts[parts.length - 1];
   const stateZipMatch = last.match(/^(.+?)\s+(\d{5}(?:-\d{4})?)\s*$/);
   const stateOnly = last.match(/^([A-Za-z][A-Za-z\s]*?)\s*$/);
-  let state: string | undefined;
-  let zip: string | undefined;
   if (stateZipMatch) {
     const normalized = normalizeStateToken(stateZipMatch[1]);
     if (!normalized) return null;
@@ -164,11 +199,33 @@ function parseAddressComponents(address: string): AddressComponents | null {
   } else {
     return null;
   }
-  // parts = [street, city?, statezip] or [street, statezip]
-  const street = parts[0].trim();
-  const city = parts.length >= 3 ? parts[1].trim() : undefined;
-  if (!street) return null;
+  city = parts.length >= 3 ? parts[1].trim() : undefined;
   return { street, city, state, zip };
+}
+
+type CensusMatch = {
+  matchedAddress?: string;
+  coordinates?: { x?: number; y?: number; longitude?: number; latitude?: number };
+  geographies?: {
+    Counties?: Array<{ GEOID?: string; NAME?: string }>;
+  };
+};
+
+function geocodeFromCensusMatch(match: CensusMatch): GeocodeResult | null {
+  const coords = match.coordinates;
+  if (!coords) return null;
+  const lon = coords.x ?? coords.longitude;
+  const lat = coords.y ?? coords.latitude;
+  if (typeof lon !== "number" || typeof lat !== "number") return null;
+  const county = match.geographies?.Counties?.[0];
+  return {
+    x: lon,
+    y: lat,
+    wkid: 4326,
+    address: match.matchedAddress,
+    countyGeoid: county?.GEOID ?? null,
+    countyName: county?.NAME ?? null,
+  };
 }
 
 function candidateKey(r: GeocodeResult): string {
@@ -215,13 +272,10 @@ async function geocodeCensusComponents(
   const res = await fetch(`${CENSUS_GEOCODER_URL}?${params.toString()}`).catch(() => null);
   if (!res?.ok) return null;
   const data = await res.json();
-  const match = data.result?.addressMatches?.[0];
-  const coords = match?.coordinates;
-  if (!coords) return null;
-  const lon = coords.x ?? coords.longitude;
-  const lat = coords.y ?? coords.latitude;
-  if (typeof lon !== "number" || typeof lat !== "number") return null;
-  return { x: lon, y: lat, wkid: 4326, address: match.matchedAddress };
+  const match = data.result?.addressMatches?.[0] as CensusMatch | undefined;
+  if (!match) return null;
+  void outSR;
+  return geocodeFromCensusMatch(match);
 }
 
 /** Census geocoder (single-line) – accepts any US result; district layers decide if we're in the county. */
@@ -238,13 +292,36 @@ async function geocodeCensusSingleLine(
   const res = await fetch(`${CENSUS_GEOCODER_URL}?${params.toString()}`).catch(() => null);
   if (!res?.ok) return null;
   const data = await res.json();
-  const match = data.result?.addressMatches?.[0];
-  const coords = match?.coordinates;
-  if (!coords) return null;
-  const lon = coords.x ?? coords.longitude;
-  const lat = coords.y ?? coords.latitude;
-  if (typeof lon !== "number" || typeof lat !== "number") return null;
-  return { x: lon, y: lat, wkid: 4326, address: match.matchedAddress };
+  const match = data.result?.addressMatches?.[0] as CensusMatch | undefined;
+  if (!match) return null;
+  void outSR;
+  return geocodeFromCensusMatch(match);
+}
+
+/** Reverse-geocode county at a point via Census (for clearer out-of-county messages). */
+export async function getCensusCountyAtPoint(
+  x: number,
+  y: number
+): Promise<{ countyGeoid: string | null; countyName: string | null } | null> {
+  const params = new URLSearchParams({
+    x: String(x),
+    y: String(y),
+    benchmark: "Public_AR_Current",
+    vintage: "Current_Current",
+    format: "json",
+  });
+  const url = `https://geocoding.geo.census.gov/geocoder/geographies/coordinates?${params.toString()}`;
+  const res = await fetch(url).catch(() => null);
+  if (!res?.ok) return null;
+  const data = await res.json();
+  const county = data.result?.geographies?.Counties?.[0] as
+    | { GEOID?: string; NAME?: string }
+    | undefined;
+  if (!county) return null;
+  return {
+    countyGeoid: county.GEOID ?? null,
+    countyName: county.NAME ?? null,
+  };
 }
 
 /** Nominatim (OSM) fallback – only accept if inside Baltimore County bbox. */

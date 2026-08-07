@@ -25,7 +25,7 @@ const BALTIMORE_CITY_ERROR =
   "This address appears to be in Baltimore City, not Baltimore County. This tool only covers Baltimore County councilmanic districts.";
 
 const BALTIMORE_CITY_HELP_LINK = {
-  href: "https://www.baltimorecity.gov/boe/our-work/election-information",
+  href: "https://www.baltimorecity.gov/boe",
   label: "Find more info about your local elections here.",
 };
 
